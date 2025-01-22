@@ -48,11 +48,9 @@ set(OPEN62541_VER_PATCH 8)
 set(OPEN62541_VER_LABEL "-undefined") # like "-rc1" or "-g4538abcd" or "-g4538abcd-dirty"
 set(OPEN62541_VER_COMMIT "unknown-commit")
 
-# Overwrite the version information based on git if available and we are the main cmake project.
-if (CMAKE_SOURCE_DIR STREQUAL PROJECT_SOURCE_DIR)
-    include(SetGitBasedVersion)
-    set_open62541_version()
-endif()
+# Overwrite the version information based on git if available
+include(SetGitBasedVersion)
+set_open62541_version()
 
 # Examples for the version string are:
 # v1.2
@@ -68,7 +66,7 @@ MESSAGE(STATUS "open62541 Version: ${OPEN62541_VERSION}")
 # Architecture #
 ################
 
-set(UA_ARCHITECTURES "none" "posix" "win32" "zephyr")
+set(UA_ARCHITECTURES "none" "posix" "win32" "zephyr" "wasm")
 set(UA_ARCHITECTURE "" CACHE STRING "Architecture to build open62541 for")
 SET_PROPERTY(CACHE UA_ARCHITECTURE PROPERTY STRINGS "" ${UA_ARCHITECTURES})
 
@@ -87,6 +85,8 @@ elseif("${UA_ARCHITECTURE}" STREQUAL "win32")
     set(UA_ARCHITECTURE_WIN32 1)
 elseif("${UA_ARCHITECTURE}" STREQUAL "zephyr")
     set(UA_ARCHITECTURE_ZEPHYR 1)
+elseif("${UA_ARCHITECTURE}" STREQUAL "wasm")
+    set(UA_ARCHITECTURE_WASM 1)
 endif()
 
 #################
@@ -117,12 +117,6 @@ option(UA_ENABLE_NODESETLOADER "Enable nodesetLoader public API" OFF)
 option(UA_ENABLE_GDS_PUSHMANAGEMENT "Enable GDS pushManagement support" OFF)
 option(UA_ENABLE_DATATYPES_ALL "Generate all datatypes for namespace zero (uses more binary space)" ON)
 
-option(UA_ENABLE_JSON_ENCODING_LEGACY "Use the old JSON encoding before the v1.05 spec" OFF)
-mark_as_advanced(UA_ENABLE_JSON_ENCODING_LEGACY)
-if(UA_ENABLE_JSON_ENCODING_LEGACY AND NOT UA_ENABLE_JSON_ENCODING)
-    message(FATAL_ERROR "UA_ENABLE_JSON_ENCODING_LEGACY requires UA_ENABLE_JSON_ENCODING also")
-endif()
-
 if(UA_INFORMATION_MODEL_AUTOLOAD AND NOT UA_BUILD_FUZZING)
     set(UA_ENABLE_NODESET_INJECTOR ON)
 endif()
@@ -147,42 +141,8 @@ mark_as_advanced(UA_ENABLE_PARSING)
 option(UA_ENABLE_INLINABLE_EXPORT "Export 'static inline' methods as regular API" OFF)
 mark_as_advanced(UA_ENABLE_INLINABLE_EXPORT)
 
-# mDNS provider
-set(UA_MDNS_PLUGINS "MDNSD" "AVAHI")
-set(UA_ENABLE_DISCOVERY_MULTICAST "OFF" CACHE STRING "mDNS discovery support")
+option(UA_ENABLE_DISCOVERY_MULTICAST "Enable Discovery Service with multicast support (LDS-ME)" OFF)
 mark_as_advanced(UA_ENABLE_DISCOVERY_MULTICAST)
-SET_PROPERTY(CACHE UA_ENABLE_DISCOVERY_MULTICAST PROPERTY STRINGS "OFF" ${UA_MDNS_PLUGINS})
-option(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD "Enable mDNS discovery support (uses mdnsd)" OFF)
-mark_as_advanced(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD)
-option(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI "Enable mDNS discovery support (uses Avahi)" OFF)
-mark_as_advanced(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI)
-
-list (FIND UA_MDNS_PLUGINS ${UA_ENABLE_DISCOVERY_MULTICAST} _tmp)
-if(UA_ENABLE_DISCOVERY_MULTICAST STREQUAL "OFF" OR ${_tmp} GREATER -1)
-    set(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD OFF)
-    set(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI OFF)
-    if(UA_ENABLE_DISCOVERY_MULTICAST STREQUAL "MDNSD")
-        set(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD ON)
-    elseif(UA_ENABLE_DISCOVERY_MULTICAST STREQUAL "AVAHI")
-        set(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI ON)
-    endif()
-# Only for backward compatability
-elseif(UA_ENABLE_DISCOVERY_MULTICAST OR UA_ENABLE_DISCOVERY_MULTICAST STREQUAL "ON")
-    message(DEPRECATION "Set UA_ENABLE_DISCOVERY_MULTICAST to the desired mDNS library." )
-    if(NOT UA_ENABLE_DISCOVERY_MULTICAST_AVAHI)
-    set(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD ON)
-    endif()
-else()
-    message(DEPRECATION "Set UA_ENABLE_DISCOVERY_MULTICAST to the desired mDNS library." )
-    if(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD)
-        set(UA_ENABLE_DISCOVERY_MULTICAST "MDNSD")
-        set(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI OFF)
-    endif()
-    if(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI)
-        set(UA_ENABLE_DISCOVERY_MULTICAST "AVAHI")
-        set(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD OFF)
-    endif()
-endif()
 
 # security provider
 set(UA_ENCRYPTION_PLUGINS "MBEDTLS" "OPENSSL" "LIBRESSL")
@@ -273,8 +233,7 @@ endif()
 if(UA_BUILD_FUZZING OR UA_BUILD_OSS_FUZZ OR UA_BUILD_FUZZING_CORPUS)
     # Force enable options not passed in the build script, to also fuzzy-test this code
     set(UA_ENABLE_DISCOVERY ON CACHE STRING "" FORCE)
-    set(UA_ENABLE_DISCOVERY_MULTICAST MDNSD CACHE STRING "" FORCE)
-    set(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD ON CACHE STRING "" FORCE)
+    set(UA_ENABLE_DISCOVERY_MULTICAST ON CACHE STRING "" FORCE)
     set(UA_ENABLE_ENCRYPTION ON CACHE STRING "OFF" FORCE)
     set(UA_ENABLE_ENCRYPTION_MBEDTLS ON CACHE STRING "" FORCE)
     set(UA_ENABLE_HISTORIZING ON CACHE STRING "" FORCE)
@@ -295,7 +254,7 @@ endif()
 
 if(UA_ENABLE_DISCOVERY_MULTICAST AND NOT UA_ENABLE_DISCOVERY)
     MESSAGE(WARNING "UA_ENABLE_DISCOVERY_MULTICAST is enabled, but not UA_ENABLE_DISCOVERY. UA_ENABLE_DISCOVERY_MULTICAST will be set to OFF")
-    SET(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD OFF CACHE BOOL "Enable Discovery Service with multicast support (LDS-ME)" FORCE)
+    SET(UA_ENABLE_DISCOVERY_MULTICAST OFF CACHE BOOL "Enable Discovery Service with multicast support (LDS-ME)" FORCE)
 endif()
 
 # Advanced options
@@ -541,13 +500,6 @@ if(MINGW)
     list(APPEND open62541_LIBRARIES ws2_32 ssp)
 endif()
 
-if(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI)
-    find_package(PkgConfig REQUIRED)
-    pkg_search_module(AVAHI REQUIRED avahi-client avahi-common)
-    include_directories(${AVAHI_INCLUDE_DIRS})
-    list(APPEND open62541_LIBRARIES "${AVAHI_LIBRARIES}")
-endif()
-
 #####################
 # Compiler Settings #
 #####################
@@ -741,7 +693,7 @@ file(MAKE_DIRECTORY "${PROJECT_BINARY_DIR}/src_generated")
 # Generate the config.h
 configure_file(include/open62541/config.h.in ${PROJECT_BINARY_DIR}/src_generated/open62541/config.h)
 
-if(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD)
+if(UA_ENABLE_DISCOVERY_MULTICAST)
   include(GenerateExportHeader)
     set(MDNSD_LOGLEVEL 300 CACHE STRING "Level at which logs shall be reported" FORCE)
     
@@ -792,7 +744,6 @@ set(lib_headers ${PROJECT_SOURCE_DIR}/deps/open62541_queue.h
                 ${PROJECT_SOURCE_DIR}/deps/base64.h
                 ${PROJECT_SOURCE_DIR}/deps/dtoa.h
                 ${PROJECT_SOURCE_DIR}/deps/mp_printf.h
-                ${PROJECT_SOURCE_DIR}/deps/utf8.h
                 ${PROJECT_SOURCE_DIR}/deps/itoa.h
                 ${PROJECT_SOURCE_DIR}/deps/ziptree.h
                 ${PROJECT_SOURCE_DIR}/src/ua_types_encoding_binary.h
@@ -808,10 +759,6 @@ set(lib_headers ${PROJECT_SOURCE_DIR}/deps/open62541_queue.h
                 ${PROJECT_SOURCE_DIR}/src/pubsub/ua_pubsub_networkmessage.h
                 ${PROJECT_SOURCE_DIR}/src/pubsub/ua_pubsub_internal.h
                 ${PROJECT_SOURCE_DIR}/src/pubsub/ua_pubsub_keystorage.h)
-
-if(UA_ENABLE_ENCRYPTION AND UA_ARCHITECTURE_WIN32)
-    list(APPEND lib_headers ${PROJECT_SOURCE_DIR}/deps/tr_dirent.h)
-endif()
 
 set(lib_sources ${PROJECT_SOURCE_DIR}/src/ua_types.c
                 ${PROJECT_SOURCE_DIR}/src/ua_types_encoding_binary.c
@@ -867,7 +814,6 @@ set(lib_sources ${PROJECT_SOURCE_DIR}/src/ua_types.c
                 ${PROJECT_SOURCE_DIR}/deps/base64.c
                 ${PROJECT_SOURCE_DIR}/deps/dtoa.c
                 ${PROJECT_SOURCE_DIR}/deps/mp_printf.c
-                ${PROJECT_SOURCE_DIR}/deps/utf8.c
                 ${PROJECT_SOURCE_DIR}/deps/itoa.c
                 ${PROJECT_SOURCE_DIR}/deps/ziptree.c)
 
@@ -893,7 +839,6 @@ if(UA_ENABLE_JSON_ENCODING)
     list(APPEND lib_sources ${PROJECT_SOURCE_DIR}/deps/cj5.c
                             ${PROJECT_SOURCE_DIR}/deps/parse_num.c
                             ${PROJECT_SOURCE_DIR}/src/ua_types_encoding_json.c
-                            ${PROJECT_SOURCE_DIR}/src/ua_types_encoding_json_105.c
                             ${PROJECT_SOURCE_DIR}/src/pubsub/ua_pubsub_networkmessage_json.c)
 endif()
 
@@ -926,24 +871,20 @@ if(UA_DEBUG_DUMP_PKGS)
     list(APPEND lib_sources ${PROJECT_SOURCE_DIR}/plugins/ua_debug_dump_pkgs.c)
 endif()
 
-if(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD)
+if(UA_ENABLE_DISCOVERY_MULTICAST)
     # prepend in list, otherwise it complains that winsock2.h has to be included before windows.h
     list(APPEND lib_headers
-        ${PROJECT_BINARY_DIR}/src_generated/mdnsd_config.h
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/1035.h
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/xht.h
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/sdtxt.h
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/mdnsd.h)
+         ${PROJECT_BINARY_DIR}/src_generated/mdnsd_config.h
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/1035.h
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/xht.h
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/sdtxt.h
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/mdnsd.h)
     list(APPEND lib_sources
-        ${PROJECT_SOURCE_DIR}/src/server/ua_discovery_mdns.c
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/1035.c
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/xht.c
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/sdtxt.c
-        ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/mdnsd.c)
-elseif(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI)
-    list(APPEND lib_sources
-      ${PROJECT_SOURCE_DIR}/src/server/ua_discovery_mdns_avahi.c
-    )
+         ${PROJECT_SOURCE_DIR}/src/server/ua_discovery_mdns.c
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/1035.c
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/xht.c
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/sdtxt.c
+         ${PROJECT_SOURCE_DIR}/deps/mdnsd/libmdnsd/mdnsd.c)
 endif()
 
 if(UA_BUILD_FUZZING OR UA_BUILD_OSS_FUZZ)
@@ -981,6 +922,22 @@ if(UA_ARCHITECTURE_POSIX OR UA_ARCHITECTURE_WIN32)
          ${PROJECT_SOURCE_DIR}/arch/posix/eventloop_posix_udp.c
          ${PROJECT_SOURCE_DIR}/arch/posix/eventloop_posix_eth.c
          ${PROJECT_SOURCE_DIR}/arch/posix/eventloop_posix_interrupt.c)
+endif()
+
+if(UA_ARCHITECTURE_WASM)
+    include_directories(
+        /wasm-micro-runtime/core/iwasm/libraries/lib-socket/inc
+    )
+
+    list(APPEND plugin_sources
+         ${PROJECT_SOURCE_DIR}/arch/common/timer.h
+         ${PROJECT_SOURCE_DIR}/arch/common/timer.c
+         ${PROJECT_SOURCE_DIR}/arch/wasm/clock_wasm.c
+         ${PROJECT_SOURCE_DIR}/arch/common/eventloop_common.h
+         ${PROJECT_SOURCE_DIR}/arch/common/eventloop_common.c
+         ${PROJECT_SOURCE_DIR}/arch/wasm/eventloop_wasm.h
+         ${PROJECT_SOURCE_DIR}/arch/wasm/eventloop_wasm.c
+         ${PROJECT_SOURCE_DIR}/arch/wasm/eventloop_wasm_tcp.c)
 endif()
 
 if(UA_ARCHITECTURE_ZEPHYR)
@@ -1027,7 +984,7 @@ endif()
 # Always include encryption plugins into the amalgamation
 # Use guards in the files to ensure that UA_ENABLE_ENCRYPTON_MBEDTLS and UA_ENABLE_ENCRYPTION_OPENSSL are honored.
 
-if(((UNIX OR UA_ARCHITECTURE_WIN32) AND UA_ENABLE_ENCRYPTION) OR UA_ENABLE_AMALGAMATION)
+if((UNIX AND UA_ENABLE_ENCRYPTION) OR UA_ENABLE_AMALGAMATION)
     list(APPEND plugin_sources ${PROJECT_SOURCE_DIR}/plugins/crypto/ua_filestore_common.h
                                ${PROJECT_SOURCE_DIR}/plugins/crypto/ua_filestore_common.c
                                ${PROJECT_SOURCE_DIR}/plugins/crypto/ua_certificategroup_filestore.c
@@ -1098,7 +1055,7 @@ endif()
 set(UA_FILE_NODESETS) # List of nodeset-xml files to be considered in the generated information model
 set(UA_NODESET_DIR ${PROJECT_SOURCE_DIR}/deps/ua-nodeset CACHE STRING "The path to the node-set directory (e.g. from https://github.com/OPCFoundation/UA-Nodeset)")
 
-set(UA_FILE_NS0_PRIVATE "")
+unset(UA_FILE_NS0_PRIVATE)
 if(UA_FILE_NS0)
     set(UA_FILE_NS0_PRIVATE "${UA_FILE_NS0}")
 endif()
@@ -1362,7 +1319,7 @@ add_library(open62541::open62541 ALIAS open62541)
 target_compile_definitions(open62541-object PRIVATE -DUA_DYNAMIC_LINKING_EXPORT)
 target_compile_definitions(open62541-plugins PRIVATE -DUA_DYNAMIC_LINKING_EXPORT)
 target_compile_definitions(open62541 PRIVATE -DUA_DYNAMIC_LINKING_EXPORT)
-if(UA_ENABLE_DISCOVERY_MULTICAST_MDNSD)
+if(UA_ENABLE_DISCOVERY_MULTICAST)
     target_compile_definitions(open62541-object PRIVATE -DMDNSD_DYNAMIC_LINKING_EXPORT)
     target_compile_definitions(open62541 PRIVATE -DMDNSD_DYNAMIC_LINKING_EXPORT)
 endif()
@@ -1384,9 +1341,6 @@ SET_TARGET_PROPERTIES(open62541 PROPERTIES
 # DLL requires linking to dependencies
 target_link_libraries(open62541 PUBLIC ${open62541_PUBLIC_LIBRARIES})
 target_link_libraries(open62541 PRIVATE ${open62541_LIBRARIES})
-if(UA_ENABLE_DISCOVERY_MULTICAST_AVAHI)
-    target_link_libraries(open62541 PUBLIC ${AVAHI_LIBRARIES})
-endif()
 
 ##########################
 # Build Selected Targets #
@@ -1551,3 +1505,5 @@ if(UA_ENABLE_NODESET_INJECTOR)
     add_subdirectory(tools/nodeset_injector)
     set(UA_NODESETINJECTOR_GENERATORS ${UA_NODESETINJECTOR_GENERATORS})
 endif()
+
+# add_subdirectory(wasm-demo)
