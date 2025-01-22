@@ -90,25 +90,25 @@ RUN mkdir -p /apps/ovmf /apps/qemu
 
 WORKDIR /zig-lang/
 
-USER ubuntu
-## Install rust
-ENV CARGO_HOME=/home/ubuntu/.cargo
-ENV RUSTUP_HOME=/home/ubuntu/.local/share/rustup
+# USER ubuntu
+# ## Install rust
+# ENV CARGO_HOME=/home/ubuntu/.cargo
+# ENV RUSTUP_HOME=/home/ubuntu/.local/share/rustup
 
-RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
-ENV PATH=/home/ubuntu/.cargo/bin:/home/ubuntu/.local/share/rustup/bin:$PATH
-RUN cargo install cargo-wasi cargo-wasix wasm-opt 
+# RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
+# ENV PATH=/home/ubuntu/.cargo/bin:/home/ubuntu/.local/share/rustup/bin:$PATH
+# RUN cargo install cargo-wasi cargo-wasix wasm-opt 
 
-# build a simple rust application in order to download the toolchain
-WORKDIR /home/ubuntu/app/examples
-RUN cargo new wasix-hello-world
-WORKDIR /home/ubuntu/app/examples/wasix-hello-world
-RUN cargo wasix build --release
-RUN cargo wasi build --release
-RUN cargo build --release
-RUN rm -rf /home/ubuntu/app/examples
+# # build a simple rust application in order to download the toolchain
+# WORKDIR /home/ubuntu/app/examples
+# RUN cargo new wasix-hello-world
+# WORKDIR /home/ubuntu/app/examples/wasix-hello-world
+# RUN cargo wasix build --release
+# RUN cargo wasi build --release
+# RUN cargo build --release
+# RUN rm -rf /home/ubuntu/app/examples
 
-USER root
+# USER root
 
 #RUN apt-get update && \
 #    apt-get install --no-install-recommends -y gzip
