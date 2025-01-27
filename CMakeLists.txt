@@ -925,6 +925,9 @@ if(UA_ARCHITECTURE_POSIX OR UA_ARCHITECTURE_WIN32)
 endif()
 
 if(UA_ARCHITECTURE_WASM)
+    add_compile_definitions(_WASI_EMULATED_SIGNAL __linux__)
+    add_compile_definitions(SIGINT=2)
+
     include_directories(
         /wasm-micro-runtime/core/iwasm/libraries/lib-socket/inc
     )
